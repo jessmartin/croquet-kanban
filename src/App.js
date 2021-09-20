@@ -1,18 +1,26 @@
-import React, { useState } from 'react'
+import React, { useState, useCallback } from 'react'
 import styled from 'styled-components'
 import dataset from './dataset'
 import Column from './Column'
 import { DragDropContext, Droppable } from 'react-beautiful-dnd'
 
 import { Model } from "@croquet/croquet";
-import { InCroquetSession } from '@croquet/react';
+import { InCroquetSession, useModelRoot, usePublish, useSubscribe } from '@croquet/react';
 
 class BoardModel extends Model {
   init(option) {
     super.init(option);
-    this.lists = [];
-    this.tasks = [];
+    this.lists = new Map();
+    this.tasks = new Map();
+
+    this.subscribe(this.id, "task-moved", this.onTaskMoved);
   }
+
+  onTaskMoved(data) {
+    const { taskId, newListId } = data;
+    this.publish("task-moved", { taskId, newListId });
+  }
+
 }
 
 BoardModel.register("BoardModel");
@@ -30,14 +38,19 @@ const App = () => {
       password="abc"
       model={BoardModel}
       eventRateLimit={60}
+      debug="session,messages,sends,subscribe"
     >
       <TrelloBoard />
-    </InCroquetSession>
+    </InCroquetSession >
   )
 }
 
 const TrelloBoard = () => {
+  const model = useModelRoot();
   const [data, setData] = useState(dataset)
+  const publishTaskMoved = usePublish((id, newListId) => [
+    model.id, "task-moved", { taskId: id, newListId }
+  ])
 
   const onDragEnd = result => {
     const { destination, source, draggableId, type } = result;
@@ -107,9 +120,18 @@ const TrelloBoard = () => {
         [newFinish.id]: newFinish
       }
     }
+    publishTaskMoved(draggableId, destination.droppableId);
 
     setData(newState)
   }
+
+  const moveTask = useCallback(
+    (dragIndex, hoverIndex, droppableId) => {
+      // create the new state by moving the task to the appropriate list
+      // setData(newState)
+    }
+  );
+  // useSubscribe(model.id, "task-moved", moveTask);
 
   return (
     <DragDropContext onDragEnd={onDragEnd}>
